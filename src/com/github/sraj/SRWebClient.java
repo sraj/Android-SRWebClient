@@ -4,7 +4,6 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Message;
 import android.text.TextUtils;
-
 import android.util.Log;
 
 import java.net.HttpURLConnection;
@@ -34,11 +33,12 @@ public class SRWebClient {
 
         httpOperation = Executors.newSingleThreadExecutor();
 
-        if(method == HttpMethod.POST) {
+        if(method.equals(HttpMethod.POST)) {
             httpMethod = "POST";
         }
 
-        try { httpURL = new URL(url);
+        try {
+            httpURL = new URL(url);
         } catch(Throwable t) {
             Log.d(LOG_TAG, "Malformed URL");
         }
@@ -114,7 +114,7 @@ public class SRWebClient {
                     httpConn = (HttpURLConnection) httpURL.openConnection();
                     httpConn.setRequestMethod(httpMethod);
                     httpConn.setConnectTimeout(timeoutInterval);
-                    //httpConn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+
                     if (httpHeaders != null) {
                         for (String key : httpHeaders.keySet()) {
                             httpConn.addRequestProperty(key, httpHeaders.get(key));
