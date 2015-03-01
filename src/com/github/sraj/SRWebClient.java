@@ -103,8 +103,6 @@ public class SRWebClient {
 
     public SRWebClient send(final Handler success, final Handler failure) {
 
-        final SRWebClient that = this;
-
         httpOperation.submit(new Runnable() {
             @Override
             public void run() {
@@ -114,6 +112,7 @@ public class SRWebClient {
                     httpConn = (HttpURLConnection) httpURL.openConnection();
                     httpConn.setRequestMethod(httpMethod);
                     httpConn.setConnectTimeout(timeoutInterval);
+                    httpConn.setInstanceFollowRedirects(false);
 
                     if (httpHeaders != null) {
                         for (String key : httpHeaders.keySet()) {
