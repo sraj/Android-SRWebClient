@@ -11,30 +11,35 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class SRWebClient {
 
-    static final String LOG_TAG = "SRWebClient";
-    static enum HttpMethod { GET, POST }
+    public static enum HttpMethod { GET, POST }
+    public int timeoutInterval = 30 * 1000; //Milliseconds
 
+    private static final String LOG_TAG = SRWebClient.class.getSimpleName();
+    private static final Map<HttpMethod,String> httpMethodStringMap = new HashMap<HttpMethod,String>();
+    private HttpMethod httpMethod = HttpMethod.GET;
+    private ExecutorService httpOperation;
     private byte[] postData;
     private URL httpURL;
-    private ExecutorService httpOperation;
-    private String httpMethod = "GET";
     private HashMap<String, String> httpHeaders;
-    private String[] httpMethods = { "GET", "POST" };
 
-    public int timeoutInterval = 30 * 1000; //Milliseconds
+    static {
+        httpMethodStringMap.put(HttpMethod.GET, "GET");
+        httpMethodStringMap.put(HttpMethod.POST, "POST");
+    }
 
     public SRWebClient(String url, HttpMethod method) {
 
         httpOperation = Executors.newSingleThreadExecutor();
 
-        if(method.equals(HttpMethod.POST)) {
-            httpMethod = "POST";
+        if (method != null) {
+            httpMethod = method;
         }
 
         try {
@@ -69,12 +74,10 @@ public class SRWebClient {
         return TextUtils.join("&", dataList);
     }
 
-
     public SRWebClient data(HashMap data) {
         if (data != null && data.size() > 0) {
-            if (httpMethod.equals("GET")) {
+            if (httpMethod.equals(HttpMethod.GET)) {
                 try {
-                    Log.d("test", httpURL.toString() + "?" + build(data));
                     httpURL = new URL(httpURL.toString() + "?" + build(data));
                 } catch (Throwable t) {
                     Log.d(LOG_TAG, "Malformed URL");
@@ -110,17 +113,17 @@ public class SRWebClient {
                 try {
 
                     httpConn = (HttpURLConnection) httpURL.openConnection();
-                    httpConn.setRequestMethod(httpMethod);
+                    httpConn.setRequestMethod(httpMethodStringMap.get(httpMethod));
                     httpConn.setConnectTimeout(timeoutInterval);
                     httpConn.setInstanceFollowRedirects(false);
 
-                    if (httpHeaders != null) {
+                    if (httpHeaders != null && !httpHeaders.isEmpty()) {
                         for (String key : httpHeaders.keySet()) {
                             httpConn.addRequestProperty(key, httpHeaders.get(key));
                         }
                     }
 
-                    if (httpMethod.equals("POST") && postData != null) {
+                    if (httpMethod.equals(HttpMethod.POST) && postData != null) {
                         httpConn.setDoOutput(true);
                         httpConn.setRequestProperty("Content-Length", String.valueOf(postData.length));
                         httpConn.getOutputStream().write(postData);
@@ -158,12 +161,8 @@ public class SRWebClient {
                     }
                     e.printStackTrace();
                 } finally {
-                    try {
-                        if (httpConn != null) {
-                            httpConn.disconnect();
-                        }
-                    } catch(Throwable t) {
-                        Log.d(LOG_TAG, "Error closing http connection");
+                    if (httpConn != null) {
+                        httpConn.disconnect();
                     }
                 }
             }
