@@ -6,17 +6,20 @@ import android.os.Message;
 import android.text.TextUtils;
 import android.util.Log;
 
+import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class SRWebClient {
+public final class SRWebClient {
 
     public static enum HttpMethod { GET, POST }
     public int timeoutInterval = 30 * 1000; //Milliseconds
@@ -44,7 +47,7 @@ public class SRWebClient {
 
         try {
             httpURL = new URL(url);
-        } catch(Throwable t) {
+        } catch(MalformedURLException e) {
             Log.d(LOG_TAG, "Malformed URL");
         }
     }
@@ -65,6 +68,17 @@ public class SRWebClient {
         return SRWebClient.POST(url).send(success, failure);
     }
 
+    public void cancel() {
+        httpOperation.shutdown();
+    }
+
+    public SRWebClient headers(HashMap<String, String> headers) {
+        if (headers != null && headers.size() > 0) {
+            this.httpHeaders = headers;
+        }
+        return this;
+    }
+
     private String build(HashMap data) throws Exception {
         ArrayList<String> dataList = new ArrayList<String>();
         List<String> mapKeys = new ArrayList<String>(data.keySet());
@@ -79,13 +93,13 @@ public class SRWebClient {
             if (httpMethod.equals(HttpMethod.GET)) {
                 try {
                     httpURL = new URL(httpURL.toString() + "?" + build(data));
-                } catch (Throwable t) {
+                } catch (Exception e) {
                     Log.d(LOG_TAG, "Malformed URL");
                 }
             } else {
                 try {
                     postData = build(data).getBytes("UTF-8");
-                } catch (Throwable t) {
+                } catch (Exception e) {
                     Log.d(LOG_TAG, "Malformed post data");
                 }
             }
@@ -93,15 +107,40 @@ public class SRWebClient {
         return this;
     }
 
-    public SRWebClient headers(HashMap<String, String> headers) {
-        if (headers != null && headers.size() > 0) {
-            this.httpHeaders = headers;
+    public SRWebClient data(byte[] imageBytes, String fieldName, HashMap data) {
+        try {
+            if (imageBytes.length > 0 && httpMethod.equals(HttpMethod.POST)) {
+                String uuId = UUID.randomUUID().toString();
+                String boundMark = String.format("------WebKitFormBoundary%s", uuId);
+                ByteArrayOutputStream byteOutput = new ByteArrayOutputStream();
+                StringBuilder postBuild = new StringBuilder();
+                httpHeaders.put("Content-Type", String.format("multipart/form-data; boundary=%s", boundMark));
+                if (data != null && data.size() > 0) {
+                    postBuild.append(String.format("--%s\r\n", boundMark));
+                    List<String> mapKeys = new ArrayList<String>(data.keySet());
+                    for (String key : mapKeys) {
+                        postBuild.append(String.format("--%s\r\n", boundMark));
+                        postBuild.append(String.format("Content-Disposition: form-data; name=\"%s\"\r\n\r\n", key));
+                        postBuild.append(String.format("%s\r\n", String.valueOf(data.get(key))));
+                    }
+                }
+                postBuild.append(String.format("--%s\r\n", boundMark));
+                postBuild.append(String.format("Content-Disposition: form-data; name=\"%s\"; filename=\"%s\".jpg\r\n",
+                        fieldName,
+                        Long.toString(System.currentTimeMillis()/1000L)));
+                postBuild.append("Content-Type: image/jpeg\r\n\r\n");
+                byteOutput.write(new String(postBuild).getBytes("UTF-8"));
+                byteOutput.write(imageBytes);
+                postBuild = new StringBuilder();
+                postBuild.append("\r\n");
+                postBuild.append(String.format("\r\n--%s--\r\n", boundMark));
+                byteOutput.write(new String(postBuild).getBytes("UTF-8"));
+                postData = byteOutput.toByteArray();
+            }
+        } catch (Exception e) {
+            Log.d(LOG_TAG, "Malformed post data");
         }
         return this;
-    }
-
-    public void cancel() {
-        httpOperation.shutdown();
     }
 
     public SRWebClient send(final Handler success, final Handler failure) {
@@ -125,7 +164,8 @@ public class SRWebClient {
 
                     if (httpMethod.equals(HttpMethod.POST) && postData != null) {
                         httpConn.setDoOutput(true);
-                        httpConn.setRequestProperty("Content-Length", String.valueOf(postData.length));
+                        httpConn.addRequestProperty("Content-Length", String.valueOf(postData.length));
+                        httpConn.addRequestProperty("Content-Type", "application/x-www-form-urlencoded");
                         httpConn.getOutputStream().write(postData);
                     }
 
