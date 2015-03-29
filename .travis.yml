@@ -1,6 +1,6 @@
 language: android
 jdk: openjdk7
-install: ant deps
+install: ant release
 android:
   components:
     - build-tools-19.1.0
