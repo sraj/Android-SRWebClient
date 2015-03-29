@@ -167,7 +167,7 @@ public class SRWebClient {
                 }
             }
         });
-        httpOperation.shutdown()
+        httpOperation.shutdown();
         return this;
     }
 }
