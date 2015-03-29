@@ -6,4 +6,4 @@ android:
     - android-19
     - extra
 script:
-  - ant release
+  - ant clean release
