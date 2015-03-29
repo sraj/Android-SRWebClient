@@ -6,6 +6,10 @@ import android.os.Message;
 import android.text.TextUtils;
 import android.util.Log;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
@@ -14,7 +18,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.Scanner;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -107,13 +110,16 @@ public final class SRWebClient {
         return this;
     }
 
-    public SRWebClient data(byte[] imageBytes, String fieldName, HashMap data) {
+    public SRWebClient data(byte[] uploadBytes, String fieldName, HashMap data) {
+        ByteArrayOutputStream byteOutput = new ByteArrayOutputStream();
         try {
-            if (imageBytes.length > 0 && httpMethod.equals(HttpMethod.POST)) {
-                String uuId = UUID.randomUUID().toString();
-                String boundMark = String.format("------WebKitFormBoundary%s", uuId);
-                ByteArrayOutputStream byteOutput = new ByteArrayOutputStream();
+            if (uploadBytes != null && uploadBytes.length > 0 && httpMethod.equals(HttpMethod.POST)) {
+                String boundMark = String.format("------WebKitFormBoundary%s", Long.toString(System.currentTimeMillis()));
                 StringBuilder postBuild = new StringBuilder();
+                if (httpHeaders == null) {
+                    httpHeaders = new HashMap<String, String>();
+                }
+                httpHeaders.put("Connection", "Keep-Alive");
                 httpHeaders.put("Content-Type", String.format("multipart/form-data; boundary=%s", boundMark));
                 if (data != null && data.size() > 0) {
                     postBuild.append(String.format("--%s\r\n", boundMark));
@@ -125,17 +131,19 @@ public final class SRWebClient {
                     }
                 }
                 postBuild.append(String.format("--%s\r\n", boundMark));
-                postBuild.append(String.format("Content-Disposition: form-data; name=\"%s\"; filename=\"%s\".jpg\r\n",
+                postBuild.append(String.format("Content-Disposition: form-data; name=\"%s\"; filename=\"%s.jpg\"\r\n",
                         fieldName,
-                        Long.toString(System.currentTimeMillis()/1000L)));
+                        Long.toString(System.currentTimeMillis() / 1000L)));
                 postBuild.append("Content-Type: image/jpeg\r\n\r\n");
                 byteOutput.write(new String(postBuild).getBytes("UTF-8"));
-                byteOutput.write(imageBytes);
+                byteOutput.write(uploadBytes);
                 postBuild = new StringBuilder();
                 postBuild.append("\r\n");
                 postBuild.append(String.format("\r\n--%s--\r\n", boundMark));
                 byteOutput.write(new String(postBuild).getBytes("UTF-8"));
                 postData = byteOutput.toByteArray();
+                byteOutput.flush();
+                byteOutput.close();
             }
         } catch (Exception e) {
             Log.d(LOG_TAG, "Malformed post data");
@@ -154,7 +162,12 @@ public final class SRWebClient {
                     httpConn = (HttpURLConnection) httpURL.openConnection();
                     httpConn.setRequestMethod(httpMethodStringMap.get(httpMethod));
                     httpConn.setConnectTimeout(timeoutInterval);
-                    httpConn.setInstanceFollowRedirects(false);
+                    httpConn.setReadTimeout(timeoutInterval);
+                    httpConn.setUseCaches(false);
+
+                    if (httpMethod.equals(HttpMethod.POST) && postData != null) {
+                        httpConn.addRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+                    }
 
                     if (httpHeaders != null && !httpHeaders.isEmpty()) {
                         for (String key : httpHeaders.keySet()) {
@@ -165,7 +178,6 @@ public final class SRWebClient {
                     if (httpMethod.equals(HttpMethod.POST) && postData != null) {
                         httpConn.setDoOutput(true);
                         httpConn.addRequestProperty("Content-Length", String.valueOf(postData.length));
-                        httpConn.addRequestProperty("Content-Type", "application/x-www-form-urlencoded");
                         httpConn.getOutputStream().write(postData);
                     }
 
@@ -181,8 +193,21 @@ public final class SRWebClient {
                             }
                             inStream.close();
                             if(success != null) {
+                                String contentType = httpConn.getHeaderField("Content-Type");
                                 Message result = success.obtainMessage();
-                                result.obj = response;
+                                if (contentType != null && contentType.contains("application/json")) {
+                                    try {
+                                        result.obj = new JSONObject(response);
+                                    } catch (JSONException joe) {
+                                        try {
+                                            result.obj = new JSONArray(response);
+                                        } catch (JSONException jae) {
+                                            throw jae;
+                                        }
+                                    }
+                                } else {
+                                    result.obj = response;
+                                }
                                 success.sendMessage(result);
                             }
                         }
