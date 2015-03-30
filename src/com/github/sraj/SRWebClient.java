@@ -142,8 +142,6 @@ public final class SRWebClient {
                 postBuild.append(String.format("\r\n--%s--\r\n", boundMark));
                 byteOutput.write(new String(postBuild).getBytes("UTF-8"));
                 postData = byteOutput.toByteArray();
-                byteOutput.flush();
-                byteOutput.close();
             }
         } catch (Exception e) {
             Log.d(LOG_TAG, "Malformed post data");
@@ -171,13 +169,13 @@ public final class SRWebClient {
 
                     if (httpHeaders != null && !httpHeaders.isEmpty()) {
                         for (String key : httpHeaders.keySet()) {
-                            httpConn.addRequestProperty(key, httpHeaders.get(key));
+                            httpConn.setRequestProperty(key, httpHeaders.get(key));
                         }
                     }
 
                     if (httpMethod.equals(HttpMethod.POST) && postData != null) {
                         httpConn.setDoOutput(true);
-                        httpConn.addRequestProperty("Content-Length", String.valueOf(postData.length));
+                        httpConn.setRequestProperty("Content-Length", String.valueOf(postData.length));
                         httpConn.getOutputStream().write(postData);
                     }
 
